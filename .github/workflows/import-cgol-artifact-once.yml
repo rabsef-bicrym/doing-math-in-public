@@ -1,0 +1,43 @@
+name: One-time import of cgol octagon sources
+
+on:
+  push:
+    branches: [master]
+    paths: [.github/workflows/import-cgol-artifact-once.yml]
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: master
+      - name: Download completed source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 30650506832 --repo rabsef-bicrym/doing-math-in-public --name cgol-octagon-source-export --dir _artifact
+      - name: Place project sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p projects/octagonal-honeycomb
+          cp -a _artifact/. projects/octagonal-honeycomb/
+          rm -rf _artifact
+          rm -f .github/workflows/export-cgol-sources-once.yml
+      - name: Create migration pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: migration/cgol-octagon-sources
+          delete-branch: true
+          commit-message: Import octagon standalone and interval sources
+          title: Import octagonal-honeycomb standalone and interval sources
+          body: |
+            Imports the source-only artifact from the temporary public CI branch.
+            Scratch workflows and trigger markers are intentionally omitted.
+          base: master
