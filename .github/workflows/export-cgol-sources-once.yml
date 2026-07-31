@@ -1,0 +1,42 @@
+name: One-time export of octagon scratch sources
+
+on:
+  push:
+    branches: [master]
+    paths: [.github/workflows/export-cgol-sources-once.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: rabsef-bicrym/cgol
+          ref: octagon-sound-interval-ci-2026-07-30
+          path: source
+          fetch-depth: 1
+      - name: Assemble source-only export
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p export/lean/standalone export/interval export/scripts export/provenance
+          find source -maxdepth 1 -type f -name '*.lean' -exec cp {} export/lean/standalone/ \;
+          cp source/lakefile.toml export/lean/standalone/lakefile.toml
+          cp source/lean-toolchain export/lean/standalone/lean-toolchain
+          cp source/interval/interval_verifier_emit.cpp export/interval/
+          cp source/interval/mpfr_recheck_fullx.cpp export/interval/
+          cp source/interval/build_lean_certificate.py export/interval/
+          cp source/scripts/generate_pentagon_middle_defect.py export/scripts/
+          printf 'source_repository=rabsef-bicrym/cgol\n' > export/provenance/source.txt
+          printf 'source_branch=octagon-sound-interval-ci-2026-07-30\n' >> export/provenance/source.txt
+          printf 'source_commit=%s\n' "$(git -C source rev-parse HEAD)" >> export/provenance/source.txt
+          find export -type f -print0 | sort -z | xargs -0 sha256sum > export/provenance/SHA256SUMS
+      - uses: actions/upload-artifact@v6
+        with:
+          name: cgol-octagon-source-export
+          path: export
+          if-no-files-found: error
