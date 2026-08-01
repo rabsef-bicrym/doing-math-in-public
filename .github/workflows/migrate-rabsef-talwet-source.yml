@@ -4,6 +4,9 @@ on:
   push:
     branches: [migration/rabsef-talwet-canonical]
     paths: [.github/workflows/migrate-rabsef-talwet-source.yml]
+  pull_request:
+    branches: [master]
+    paths: [.github/workflows/migrate-rabsef-talwet-source.yml]
 
 permissions:
   contents: write
