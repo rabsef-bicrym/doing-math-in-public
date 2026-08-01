@@ -1,0 +1,123 @@
+name: Lean envelope verification
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: lean-envelope-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  export_source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    name: One-time migration source export
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Assemble branch source export
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p export/rabsef-talwet-octagon
+          rsync -a \
+            --exclude '.git/' \
+            --exclude '.lake/' \
+            --exclude 'export/' \
+            ./ export/rabsef-talwet-octagon/
+          printf '%s\n' "source_branch=octagon-envelope-2026-07-24" > export/PROVENANCE.txt
+          printf '%s\n' "source_commit=$(git rev-parse HEAD)" >> export/PROVENANCE.txt
+          find export/rabsef-talwet-octagon -type f -print0 | sort -z | xargs -0 sha256sum > export/SHA256SUMS
+      - name: Upload source export
+        uses: actions/upload-artifact@v6
+        with:
+          name: rabsef-talwet-octagon-source-export
+          path: export
+          if-no-files-found: error
+
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    name: Dependency-aware kernel build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install elan
+        shell: bash
+        run: |
+          set -o pipefail
+          curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none 2>&1 | tee elan-install.log
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Restore Lean dependency cache
+        id: lean-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ~/.elan/toolchains
+            .lake/packages
+          key: lean-envelope-v430-mathlib430
+          restore-keys: |
+            lean-envelope-v430-
+
+      - name: Resolve pinned dependencies only when absent
+        shell: bash
+        run: |
+          set -o pipefail
+          if [ ! -d .lake/packages/mathlib ]; then
+            "$HOME/.elan/bin/lake" update 2>&1 | tee lake-update.log
+          else
+            echo "Restored Mathlib package tree; no dependency update needed." | tee lake-update.log
+          fi
+
+      - name: Fetch precompiled mathlib cache only when absent
+        shell: bash
+        run: |
+          set -o pipefail
+          if [ ! -d .lake/packages/mathlib/.lake/build/lib/lean/Mathlib ]; then
+            "$HOME/.elan/bin/lake" exe cache get 2>&1 | tee mathlib-cache.log
+          else
+            echo "Restored precompiled Mathlib oleans." | tee mathlib-cache.log
+          fi
+
+      - name: Save Lean dependency cache
+        if: steps.lean-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            ~/.elan/toolchains
+            .lake/packages
+          key: lean-envelope-v430-mathlib430
+
+      - name: Restore incremental project build
+        uses: actions/cache@v5
+        with:
+          path: .lake/build
+          key: lean-project-v430-${{ hashFiles('*.lean', 'lakefile.toml', 'lean-toolchain') }}
+          restore-keys: |
+            lean-project-v430-
+
+      - name: Compile complete proof graph with Lean kernel
+        shell: bash
+        run: |
+          set -o pipefail
+          "$HOME/.elan/bin/lake" build Project --wfail 2>&1 | tee lean-build.log
+
+      - name: Upload compiler logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: lean-envelope-logs
+          path: |
+            elan-install.log
+            lake-update.log
+            mathlib-cache.log
+            lean-build.log
+          if-no-files-found: ignore

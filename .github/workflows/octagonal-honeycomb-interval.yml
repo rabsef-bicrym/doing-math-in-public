@@ -1,0 +1,111 @@
+name: Octagonal honeycomb — interval certificate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: octagonal-honeycomb-interval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libboost-dev libmpfr-dev
+
+      - name: Run directed-rounding Boost verifier
+        shell: bash
+        working-directory: projects/octagonal-honeycomb/interval
+        run: |
+          set -euo pipefail
+          g++ -O3 -std=c++20 -frounding-math interval_verifier_emit.cpp -o interval_verifier_emit
+          ./interval_verifier_emit fast_certificate.octv1 2>&1 | tee fast_certificate.log
+          grep -q '^CERTIFIED_AND_EMITTED$' fast_certificate.log
+
+      - name: Independently replay with 192-bit MPFR
+        shell: bash
+        working-directory: projects/octagonal-honeycomb/interval
+        run: |
+          set -euo pipefail
+          g++ -O3 -std=c++20 mpfr_recheck_fullx.cpp -lmpfr -lgmp -o mpfr_recheck_fullx
+          ./mpfr_recheck_fullx fast_certificate.octv1 mpfr_certificate.octv2 \
+            2>&1 | tee mpfr_certificate.log
+          if grep -Eq 'refined=[1-9][0-9]*' mpfr_certificate.log; then
+            echo 'Independent replay required unexpected refinement.' >&2
+            exit 1
+          fi
+
+      - name: Generate manifest and Lean import
+        shell: bash
+        working-directory: projects/octagonal-honeycomb/interval
+        run: |
+          set -euo pipefail
+          python3 build_lean_certificate.py \
+            --input mpfr_certificate.octv2 \
+            --output NoncrystallineIntervalCertificate.lean \
+            --manifest noncrystalline_interval_manifest.json \
+            --summary NONCRYSTALLINE_INTERVAL_CERTIFICATE.md \
+            2>&1 | tee generator.log
+          sha256sum fast_certificate.octv1 mpfr_certificate.octv2 \
+            NoncrystallineIntervalCertificate.lean \
+            interval_verifier_emit.cpp mpfr_recheck_fullx.cpp \
+            | tee certificate.sha256
+
+      - name: Install elan
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -sSf \
+            https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain leanprover/lean4:v4.30.0
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Kernel-check generated certificate structure
+        shell: bash
+        working-directory: projects/octagonal-honeycomb/interval
+        run: |
+          set -euo pipefail
+          cat > lakefile.toml <<'EOF'
+          name = "IntervalCertificate"
+          defaultTargets = ["IntervalCertificate"]
+          [[require]]
+          name = "mathlib"
+          git = "https://github.com/leanprover-community/mathlib4.git"
+          rev = "v4.30.0"
+          [[lean_lib]]
+          name = "IntervalCertificate"
+          roots = ["NoncrystallineIntervalCertificate"]
+          EOF
+          printf '%s\n' 'leanprover/lean4:v4.30.0' > lean-toolchain
+          lake update
+          lake exe cache get
+          lake build IntervalCertificate --wfail 2>&1 | tee lean-certificate.log
+          ! grep -nE '\bsorry\b|\badmit\b|sorryAx|^[[:space:]]*axiom[[:space:]]' \
+            NoncrystallineIntervalCertificate.lean
+
+      - name: Upload certificate evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: octagonal-honeycomb-interval-evidence
+          path: |
+            projects/octagonal-honeycomb/interval/fast_certificate.log
+            projects/octagonal-honeycomb/interval/mpfr_certificate.log
+            projects/octagonal-honeycomb/interval/generator.log
+            projects/octagonal-honeycomb/interval/lean-certificate.log
+            projects/octagonal-honeycomb/interval/certificate.sha256
+            projects/octagonal-honeycomb/interval/noncrystalline_interval_manifest.json
+            projects/octagonal-honeycomb/interval/NONCRYSTALLINE_INTERVAL_CERTIFICATE.md
+            projects/octagonal-honeycomb/interval/fast_certificate.octv1
+            projects/octagonal-honeycomb/interval/mpfr_certificate.octv2
+            projects/octagonal-honeycomb/interval/NoncrystallineIntervalCertificate.lean
+          if-no-files-found: ignore

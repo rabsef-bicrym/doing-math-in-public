@@ -1,0 +1,110 @@
+name: Lean geometric bridge verification
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: lean-geometric-bridge-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    name: Kernel-check geometric bridge modules
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install elan
+        shell: bash
+        run: |
+          set -o pipefail
+          curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none 2>&1 | tee geometric-elan.log
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Restore Lean dependency cache
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ~/.elan/toolchains
+            .lake/packages
+          key: lean-envelope-v430-mathlib430
+          restore-keys: |
+            lean-envelope-v430-
+
+      - name: Resolve dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d .lake/packages/mathlib ]; then
+            lake update
+          fi
+          if [ ! -d .lake/packages/mathlib/.lake/build/lib/lean/Mathlib ]; then
+            lake exe cache get
+          fi
+
+      - name: Compile bridge modules independently
+        shell: bash
+        run: |
+          set +e
+          status=0
+          targets=(
+            PhaseSnappingSum
+            PhaseBaseIdentities
+            PhaseSectorAlgebra
+            SmallGapBernstein
+            SmallGapReserve
+            OctagonSupportNormalization
+            SmallGapWedge
+            SectorGapWedge
+            LargeCellCornerBank
+            NoncrystallineNetLedger
+            NoncrystallineFiniteClosure
+            NoncrystallineCellBridge
+            OneGapPhasePackage
+            WedgeSplitAlgebra
+            WedgeSplitAlgebraV2
+            WedgeSplitChain
+            PhaseBoundaryNormalization
+            OneSectorGapBridge
+            OctagonPhaseWedgeNormalization
+            OctagonSectorGapBridge
+            SecondSectorDefect
+            ThirdSectorDefect
+          )
+          : > geometric-bridge-build.log
+          for target in "${targets[@]}"; do
+            echo "===== $target =====" | tee -a geometric-bridge-build.log
+            lake build "$target" --wfail 2>&1 | tee -a geometric-bridge-build.log
+            rc=${PIPESTATUS[0]}
+            echo "STATUS $target $rc" | tee -a geometric-bridge-build.log
+            if [ "$rc" -ne 0 ]; then status=1; fi
+          done
+          exit "$status"
+
+      - name: Reject proof holes
+        if: always()
+        shell: bash
+        run: |
+          ! grep -nE '\bsorry\b|sorryAx|^[[:space:]]*axiom[[:space:]]' \
+            PhaseSnappingSum.lean PhaseSectorAlgebra.lean SmallGapReserve.lean \
+            SectorGapWedge.lean NoncrystallineCellBridge.lean OneGapPhasePackage.lean \
+            WedgeSplitAlgebra.lean WedgeSplitChain.lean PhaseBoundaryNormalization.lean \
+            OctagonSectorGapBridge.lean SecondSectorDefect.lean ThirdSectorDefect.lean
+
+      - name: Upload bridge diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: lean-geometric-bridge-logs
+          path: |
+            geometric-elan.log
+            geometric-bridge-build.log
+          if-no-files-found: ignore

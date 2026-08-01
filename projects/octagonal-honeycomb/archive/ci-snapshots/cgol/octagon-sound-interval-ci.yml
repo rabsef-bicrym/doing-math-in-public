@@ -1,0 +1,156 @@
+name: Public octagon sound interval verification
+
+on:
+  push:
+    branches: [octagon-sound-interval-ci-2026-07-30]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: public-octagon-sound-interval-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install native interval dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libboost-dev libmpfr-dev
+
+      - name: Build and run theorem-backed Boost verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -O3 -std=c++20 -frounding-math interval/interval_verifier_emit.cpp \
+            -o interval/interval_verifier_emit
+          /usr/bin/time -v interval/interval_verifier_emit interval/fast_certificate.octv1 \
+            2>&1 | tee interval/fast_certificate.log
+          grep -q '^CERTIFIED_AND_EMITTED$' interval/fast_certificate.log
+          test "$(grep -Ec '^[45]-[4-9] nodes=' interval/fast_certificate.log)" -eq 12
+
+      - name: Build and run independent 192-bit MPFR replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -O3 -std=c++20 interval/mpfr_recheck_fullx.cpp -lmpfr -lgmp \
+            -o interval/mpfr_recheck_fullx
+          /usr/bin/time -v interval/mpfr_recheck_fullx \
+            interval/fast_certificate.octv1 interval/mpfr_certificate.octv2 \
+            2>&1 | tee interval/mpfr_certificate.log
+          test "$(grep -Ec '^[45]-[4-9] input=' interval/mpfr_certificate.log)" -eq 12
+          if grep -Eq 'refined=[1-9][0-9]*' interval/mpfr_certificate.log; then
+            echo 'MPFR replay required unexpected refinement.' >&2
+            exit 1
+          fi
+
+      - name: Generate exact Lean certificate import and manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 interval/build_lean_certificate.py \
+            --input interval/mpfr_certificate.octv2 \
+            --output NoncrystallineIntervalCertificate.lean \
+            --manifest interval/noncrystalline_interval_manifest.json \
+            --summary interval/NONCRYSTALLINE_INTERVAL_CERTIFICATE.md \
+            2>&1 | tee interval/generator.log
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          m = json.loads(Path('interval/noncrystalline_interval_manifest.json').read_text())
+          assert m['format'] == 'OCTV2'
+          assert m['allLeafNumeratorsPositive'] is True
+          assert {(c['owner'], c['neighbor']) for c in m['cases']} == {
+              (a, b) for a in (4, 5) for b in range(4, 10)
+          }
+          print('manifest checks passed:', m['combinedSha256'])
+          PY
+          sha256sum interval/fast_certificate.octv1 interval/mpfr_certificate.octv2 \
+            interval/interval_verifier_emit.cpp interval/mpfr_recheck_fullx.cpp \
+            NoncrystallineIntervalCertificate.lean \
+            | tee interval/certificate.sha256
+
+      - name: Install elan
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -sSf \
+            https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Restore Lean dependency cache
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ~/.elan/toolchains
+            .lake/packages
+          key: public-octagon-lean-v430-mathlib430
+
+      - name: Resolve mathlib when absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d .lake/packages/mathlib ]; then lake update; fi
+          if [ ! -d .lake/packages/mathlib/.lake/build/lib/lean/Mathlib ]; then
+            lake exe cache get
+          fi
+
+      - name: Kernel-check analytic, domain, and selected-edge reductions
+        shell: bash
+        run: |
+          set -o pipefail
+          lake build OctagonCI --wfail 2>&1 | tee interval/lean-analytic.log
+          ! grep -nE '\bsorry\b|sorryAx|^[[:space:]]*axiom[[:space:]]' \
+            SmallSectorMonotonicityStandalone.lean \
+            FirstSectorMonotonicityStandalone.lean \
+            FirstSectorClassificationAlgebra.lean \
+            DangerousFanClassificationStandalone.lean \
+            DangerousOwnerRootStandalone.lean \
+            NeighborRangeReductionStandalone.lean \
+            SelectedEdgePartitionStandalone.lean \
+            RoleCapacityStandalone.lean \
+            NegativeChargeSelectionStandalone.lean \
+            CollisionDebtGroupingStandalone.lean \
+            SelectedChargeLedgerStandalone.lean \
+            CapacityBankStandalone.lean \
+            SelectedResourceClosureStandalone.lean
+
+      - name: Kernel-check imported finite certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .lake/build/lib/lean
+          /usr/bin/time -v lake env lean \
+            -o .lake/build/lib/lean/NoncrystallineIntervalCertificate.olean \
+            NoncrystallineIntervalCertificate.lean \
+            2>&1 | tee interval/lean-certificate.log
+          ! grep -nE '\bsorry\b|sorryAx|^[[:space:]]*axiom[[:space:]]' \
+            NoncrystallineIntervalCertificate.lean
+
+      - name: Upload reproducible evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: octagon-sound-interval-evidence
+          path: |
+            interval/fast_certificate.log
+            interval/mpfr_certificate.log
+            interval/generator.log
+            interval/lean-analytic.log
+            interval/lean-certificate.log
+            interval/certificate.sha256
+            interval/noncrystalline_interval_manifest.json
+            interval/NONCRYSTALLINE_INTERVAL_CERTIFICATE.md
+            interval/fast_certificate.octv1
+            interval/mpfr_certificate.octv2
+            NoncrystallineIntervalCertificate.lean
+          if-no-files-found: ignore

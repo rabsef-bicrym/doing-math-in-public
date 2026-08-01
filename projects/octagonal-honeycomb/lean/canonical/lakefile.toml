@@ -1,0 +1,62 @@
+name = "Project"
+defaultTargets = ["Project"]
+
+[leanOptions]
+pp.unicode.fun = true
+autoImplicit = false
+relaxedAutoImplicit = false
+linter.unnecessarySeqFocus = false
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4.git"
+rev = "v4.30.0"
+
+[[lean_lib]]
+name = "Project"
+roots = [
+  "Project",
+  "RREdgeLemma",
+  "PairGapLemma",
+  "PairGapCore",
+  "HHEdgeAlgebra",
+  "PairGapMonotone",
+  "PairGapBounds",
+  "PairGapTheorem",
+  "DischargeCounting",
+  "CrystallineSelection",
+  "DangerousPatterns",
+  "PentagonRRCore",
+  "CollisionCore",
+  "FiniteCrystallineClosure",
+  "FixedFanEdgeStability",
+  "NoncrystallineDomainReduction",
+  "ClosedPolygonEdgeBound",
+  "ContinuousChargeAccounting",
+  "ContinuousCornerBank",
+  "CollisionChargeAccounting",
+  "OctagonalCornerBank",
+  "PhaseSnappingSum",
+  "PhaseBaseIdentities",
+  "PhaseSectorAlgebra",
+  "SmallGapBernstein",
+  "SmallGapReserve",
+  "OctagonSupportNormalization",
+  "SmallGapWedge",
+  "SectorGapWedge",
+  "LargeCellCornerBank",
+  "CollisionCornerCredit",
+  "NoncrystallineNetLedger",
+  "NoncrystallineFiniteClosure",
+  "NoncrystallineCellBridge",
+  "OneGapPhasePackage",
+  "WedgeSplitAlgebra",
+  "WedgeSplitAlgebraV2",
+  "WedgeSplitChain",
+  "PhaseBoundaryNormalization",
+  "OneSectorGapBridge",
+  "OctagonPhaseWedgeNormalization",
+  "OctagonSectorGapBridge",
+  "SecondSectorDefect",
+  "ThirdSectorDefect"
+]

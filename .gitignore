@@ -1,0 +1,11 @@
+.lake/
+**/.lake/
+*.olean
+*.ilean
+*.c
+*.o
+*.out
+.DS_Store
+__pycache__/
+*.pyc
+projects/*/evidence/generated/

@@ -1,0 +1,3 @@
+source_repository=rabsef-bicrym/cgol
+source_branch=octagon-sound-interval-ci-2026-07-30
+source_commit=8b8d5a2312ac47d440b1ceb35fd43f24a1aa0cc8
