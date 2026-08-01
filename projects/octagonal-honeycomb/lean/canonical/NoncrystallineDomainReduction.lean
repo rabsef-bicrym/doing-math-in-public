@@ -15,7 +15,7 @@ The analytic phase-snapping theorem supplies the broad dangerous-cell windows:
 
 The theorems below show that one may select an owner edge whose two turns lie
 in the tighter verifier boxes, that the two opposite-cell turns then lie in
-`[0, 0.54]`, and that the common edge length lies below `4.10`.  They also
+`[0, 0.54]`, and that the common edge length lies below `4.10`. They also
 remove triangular and `10+`-sided neighbors from the interval calculation.
 -/
 
@@ -27,31 +27,22 @@ open Real
 open PairGapCore
 open PairGapBounds
 
-/-- Minimum tangent-fan area for a hexagon. -/
 def A6 : ℝ := 4 * s - 2
 
-/-- Minimum tangent-fan area for a heptagon. -/
 def A7 : ℝ := 6 * s - 5
 
-/-- Isolated hexagonal perimeter. -/
 def p6 : ℝ := 2 * Real.sqrt A6
 
-/-- Isolated heptagonal perimeter. -/
 def p7 : ℝ := 2 * Real.sqrt A7
 
-/-- Isolated triangular perimeter. -/
 def p3 : ℝ := 2 + 2 * s
 
-/-- Slope magnitude of the affine support line through side counts six and eight. -/
 def slope : ℝ := (p6 - p8) / 2
 
-/-- Affine side-count support line used in the charge decomposition. -/
 def line (n : ℕ) : ℝ := p6 - slope * ((n : ℝ) - 6)
 
-/-- Maximum possible negative owner charge, attained by a quadrilateral fan. -/
 def debt4 : ℝ := line 4 - 4
 
-/-- The lower perimeter bound used for each possible genuine side count. -/
 def isolatedLower (n : ℕ) : ℝ :=
   if n = 3 then p3
   else if n = 4 then 4
@@ -100,7 +91,6 @@ lemma p6_upper : p6 < (19123 : ℝ) / 5000 := by
   have hq : 0 < (19123 : ℝ) / 5000 := by norm_num
   nlinarith [p6_sq, p6_nonneg]
 
-/-- A slightly tighter lower bracket than the one needed in the pair-gap proof. -/
 lemma s_lower_tight : (141421 : ℝ) / 100000 < s := by
   have hs := s_sq
   have hs0 := s_nonneg
@@ -179,8 +169,6 @@ lemma p7_gt_line_seven : line 7 < p7 := by
   rw [line_seven]
   nlinarith [p7_lower, p6_upper, p8_upper]
 
-/-- Only quadrilateral and pentagonal cells can have negative net charge,
-provided the usual isolated-cell perimeter bound is available. -/
 theorem negative_cell_has_four_or_five_sides
     (n : ℕ) (P : ℝ) (hn : 3 ≤ n)
     (hiso : isolatedLower n ≤ P) (hneg : P < line n) :
@@ -215,23 +203,16 @@ theorem negative_cell_has_four_or_five_sides
       have hp7 : p7 ≤ P := by simpa [isolatedLower] using hiso
       linarith [p7_gt_line_seven]
 
-/-- Lower endpoint of the quadrilateral owner-angle root box. -/
 def quadRootLo : ℝ := 23 / 50
 
-/-- Upper endpoint of the quadrilateral owner-angle root box. -/
 def quadRootHi : ℝ := 53 / 100
 
-/-- Lower endpoint of the pentagonal owner-angle root box. -/
 def pentRootLo : ℝ := 47 / 100
 
-/-- Upper endpoint of the pentagonal owner-angle root box. -/
 def pentRootHi : ℝ := 13 / 25
 
-/-- Upper endpoint of the opposite-cell turn root box. -/
 def neighborRootHi : ℝ := 27 / 50
 
-/-- The broad phase-snapping classification forces a tighter selectable edge
-for every dangerous quadrilateral.  All angles are divided by `π`. -/
 theorem quadrilateral_has_root_edge
     (a0 a1 a2 a3 : ℝ)
     (hsum : a0 + a1 + a2 + a3 = 2)
@@ -275,8 +256,6 @@ theorem quadrilateral_has_root_edge
         simpa [quadRootLo] using lt_of_not_ge h2
       nlinarith
 
-/-- The three high corners of a dangerous pentagon contain an adjacent pair,
-and the broad high-angle window lies inside the interval verifier's owner box. -/
 theorem pentagon_has_root_edge
     (turn : Fin 5 → ℝ) (high : Fin 5 → Bool)
     (hcount : ((Finset.univ.filter fun i => high i = true).card = 3))
@@ -294,8 +273,6 @@ theorem pentagon_has_root_edge
   · have hw := hwindow (DangerousPatterns.next5 i) hnext
     constructor <;> dsimp [pentRootLo, pentRootHi] <;> nlinarith
 
-/-- At a clean trivalent endpoint, an owner turn in the quadrilateral root box
-automatically confines the opposite-cell turn to `[0, 0.54]`. -/
 theorem opposite_turn_in_root
     (owner opposite third : ℝ)
     (howner : quadRootLo ≤ owner)
@@ -306,9 +283,6 @@ theorem opposite_turn_in_root
   dsimp [quadRootLo, neighborRootHi] at howner ⊢
   linarith
 
-/-- The triangle inequality around a polygon gives `2x ≤ P`.  Combined with
-negative owner charge, this puts the selected common edge in the verifier's
-`x ≤ 4.10` root interval. -/
 theorem negative_owner_edge_length_in_root
     (n : ℕ) (P x : ℝ) (hn : n = 4 ∨ n = 5)
     (htwox : 2 * x ≤ P) (hneg : P < line n) :
@@ -317,8 +291,6 @@ theorem negative_owner_edge_length_in_root
   · nlinarith [line_four_lt_root_cutoff]
   · nlinarith [line_five_lt_root_cutoff]
 
-/-- The positive side-bank of a triangular neighbor is vastly larger than the
-worst quadrilateral debt. -/
 theorem triangular_neighbor_reserve_pays
     (r : ℝ) (hr : p3 - line 3 ≤ r) :
     debt4 < ((63 : ℝ) / (80 * 3)) * r := by
@@ -330,9 +302,6 @@ theorem triangular_neighbor_reserve_pays
   have hdebt := debt4_lt_nine_thousandths
   nlinarith
 
-/-- For every neighbor with at least ten sides, its unavoidable side-count
-surplus, divided among all sides with the `63/80` side-bank factor, already
-pays the worst possible negative owner debt. -/
 theorem large_neighbor_reserve_pays
     (n : ℕ) (r : ℝ) (hn : 10 ≤ n)
     (hr : p8 - line n ≤ r) :
