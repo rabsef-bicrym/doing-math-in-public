@@ -1,0 +1,42 @@
+name: One-time octagonal text-artifact migration
+
+on:
+  push:
+    branches: [migration/rabsef-talwet-canonical]
+    paths:
+      - .github/workflows/migrate-octagonal-text-extras.yml
+      - .migration/octagonal-honeycomb-text-extras.tar.gz.b64
+  pull_request:
+    branches: [master]
+    paths:
+      - .github/workflows/migrate-octagonal-text-extras.yml
+      - .migration/octagonal-honeycomb-text-extras.tar.gz.b64
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: migration/rabsef-talwet-canonical
+      - name: Extract text artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d .migration/octagonal-honeycomb-text-extras.tar.gz.b64 > /tmp/extras.tar.gz
+          tar -xzf /tmp/extras.tar.gz
+          rm -f .migration/octagonal-honeycomb-text-extras.tar.gz.b64
+      - name: Commit migrated artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add projects/octagonal-honeycomb .migration
+          git commit -m 'Migrate octagonal-honeycomb notes and audit scripts' || exit 0
+          git push origin HEAD:migration/rabsef-talwet-canonical
