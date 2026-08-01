@@ -10,18 +10,25 @@ The candidate optimum is the centrally symmetric hexagonal tiling with benchmark
 
 ## Current status
 
-The project contains a substantial crystalline-direction proof program and a noncrystalline extension program. Several analytic, combinatorial, and certified-computation components are machine checked. The unrestricted conjecture is **not currently represented here as a completed theorem**; see [`STATUS.md`](STATUS.md) for the exact boundary.
+The project contains a substantial crystalline-direction proof program and a noncrystalline extension program. Several analytic, combinatorial, formal, and certified-computation components are machine checked. The unrestricted conjecture is **not currently represented here as a completed theorem**.
+
+Read [`STATUS.md`](STATUS.md) before drawing conclusions from individual filenames or old reports.
 
 ## Navigation
 
-- [`STATUS.md`](STATUS.md): authoritative proof-state ledger.
-- [`lean/canonical`](lean/canonical): integrated formalization originating in `rabsef-talwet`.
+- [`STATUS.md`](STATUS.md): authoritative proof-state ledger and next obligations.
+- [`TRUST_BOUNDARY.md`](TRUST_BOUNDARY.md): what Lean checks, what external computation checks, and what remains open.
+- [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md): clean-checkout commands and certificate workflow.
+- [`HISTORY.md`](HISTORY.md): development history, failed approaches, and correction record.
+- [`lean/canonical`](lean/canonical): integrated source snapshot originating in `rabsef-talwet`.
 - [`lean/standalone`](lean/standalone): dependency-isolated analytic and ledger modules developed on temporary public CI branches.
-- [`interval`](interval): Boost directed-rounding verifier, independent MPFR replay, and Lean certificate generator.
+- [`interval`](interval): active Boost directed-rounding verifier, independent MPFR replay, and Lean certificate generator.
+- [`scripts`](scripts): symbolic checks, numerical exploration, figure generation, and source generators.
 - [`docs`](docs): papers, research notes, diagrams, and audit reports.
-- [`archive`](archive): provenance and superseded approaches.
-- [`evidence`](evidence): hashes, compact build evidence, and instructions for regenerating larger artifacts.
+- [`archive`](archive): superseded approaches, historical CI, and source provenance.
+- [`evidence`](evidence): compact manifests, hashes, and selected status records.
+- [`provenance`](provenance): source repositories, commits, and exported SHA-256 manifests.
 
 ## Reproducibility principle
 
-Generated certificates and logs are useful evidence, but the source and the exact trust boundary are primary. Large CI artifacts should normally be regenerated rather than accumulated indefinitely in Git history.
+Generated certificates and logs are useful evidence, but source code, exact statements, and the trust boundary are primary. Large CI artifacts should normally be regenerated rather than accumulated indefinitely in Git history.

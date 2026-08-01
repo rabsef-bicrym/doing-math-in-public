@@ -1,0 +1,98 @@
+name: Lean finite closure verification
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: lean-finite-closure-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    name: Kernel-check complete finite closure graph
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install elan
+        shell: bash
+        run: |
+          set -o pipefail
+          curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Restore Lean dependency cache
+        id: lean-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ~/.elan/toolchains
+            .lake/packages
+          key: lean-envelope-v430-mathlib430
+          restore-keys: |
+            lean-envelope-v430-
+
+      - name: Resolve dependencies when absent
+        shell: bash
+        run: |
+          set -o pipefail
+          if [ ! -d .lake/packages/mathlib ]; then
+            "$HOME/.elan/bin/lake" update
+          fi
+          if [ ! -d .lake/packages/mathlib/.lake/build/lib/lean/Mathlib ]; then
+            "$HOME/.elan/bin/lake" exe cache get
+          fi
+
+      - name: Kernel-check pentagon certificate
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout 180 "$HOME/.elan/bin/lake" build PentagonRRCore --wfail \
+            2>&1 | tee PentagonRRCore.log
+
+      - name: Kernel-check collision certificate
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout 180 "$HOME/.elan/bin/lake" build CollisionCore --wfail \
+            2>&1 | tee CollisionCore.log
+
+      - name: Kernel-check finite closure theorem
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout 300 "$HOME/.elan/bin/lake" build FiniteCrystallineClosure --wfail \
+            2>&1 | tee FiniteCrystallineClosure.log
+
+      - name: End-to-end kernel build
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout 300 "$HOME/.elan/bin/lake" build Project --wfail \
+            2>&1 | tee Project.log
+
+      - name: Reject proof holes
+        shell: bash
+        run: |
+          ! grep -R --line-number -E '\bsorry\b|sorryAx|^[[:space:]]*axiom[[:space:]]' \
+            PentagonRRCore.lean CollisionCore.lean FiniteCrystallineClosure.lean
+
+      - name: Upload Lean diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: lean-finite-closure-diagnostics
+          path: |
+            PentagonRRCore.log
+            CollisionCore.log
+            FiniteCrystallineClosure.log
+            Project.log
+          if-no-files-found: ignore

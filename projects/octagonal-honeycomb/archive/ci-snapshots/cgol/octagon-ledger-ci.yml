@@ -1,0 +1,67 @@
+name: Public octagon selected-ledger verification
+
+on:
+  push:
+    branches: [octagon-sound-interval-ci-2026-07-30]
+  workflow_dispatch:
+
+concurrency:
+  group: public-octagon-ledger-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install elan
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -sSf \
+            https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Restore Lean dependency cache
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ~/.elan/toolchains
+            .lake/packages
+          key: public-octagon-lean-v430-mathlib430
+
+      - name: Resolve mathlib when absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d .lake/packages/mathlib ]; then lake update; fi
+          if [ ! -d .lake/packages/mathlib/.lake/build/lib/lean/Mathlib ]; then
+            lake exe cache get
+          fi
+
+      - name: Kernel-check selected-edge and charge-ledger modules
+        shell: bash
+        run: |
+          set -o pipefail
+          lake build RoleCapacityStandalone NegativeChargeSelectionStandalone \
+            CollisionDebtGroupingStandalone SelectedChargeLedgerStandalone \
+            CapacityBankStandalone SelectedResourceClosureStandalone \
+            --wfail 2>&1 | tee ledger-lean.log
+          ! grep -nE '\bsorry\b|sorryAx|^[[:space:]]*axiom[[:space:]]' \
+            RoleCapacityStandalone.lean NegativeChargeSelectionStandalone.lean \
+            CollisionDebtGroupingStandalone.lean SelectedChargeLedgerStandalone.lean \
+            CapacityBankStandalone.lean SelectedResourceClosureStandalone.lean
+
+      - name: Upload ledger build evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: octagon-selected-ledger-evidence
+          path: ledger-lean.log
+          if-no-files-found: error

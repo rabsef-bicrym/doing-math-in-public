@@ -1,0 +1,37 @@
+name: One-time source export for doing-math-in-public
+
+on:
+  pull_request:
+    branches: [main]
+    paths: [.github/workflows/export-source-once.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: octagon-envelope-2026-07-24
+      - name: Build source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p export
+          rsync -a \
+            --exclude '.git/' \
+            --exclude '.lake/' \
+            --exclude '.github/workflows/export-source-once.yml' \
+            --exclude 'export/' \
+            ./ export/rabsef-talwet-octagon/
+          printf '%s\n' "source_branch=octagon-envelope-2026-07-24" > export/PROVENANCE.txt
+          printf '%s\n' "source_commit=$(git rev-parse HEAD)" >> export/PROVENANCE.txt
+          find export/rabsef-talwet-octagon -type f -print0 | sort -z | xargs -0 sha256sum > export/SHA256SUMS
+      - uses: actions/upload-artifact@v6
+        with:
+          name: rabsef-talwet-octagon-source-export
+          path: export
+          if-no-files-found: error

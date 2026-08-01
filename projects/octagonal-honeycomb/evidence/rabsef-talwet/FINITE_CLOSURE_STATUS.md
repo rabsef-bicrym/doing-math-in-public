@@ -1,0 +1,1 @@
+A machine-generated local/CI status report is available in the ChatGPT artifact bundle for this proof pass. This repository marker is intentionally content-light; the formal source will be committed only after a green kernel check.
