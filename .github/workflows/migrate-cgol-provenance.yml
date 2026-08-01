@@ -1,0 +1,49 @@
+name: One-time cgol provenance migration
+
+on:
+  push:
+    branches: [migration/rabsef-talwet-canonical]
+    paths: [.github/workflows/migrate-cgol-provenance.yml]
+  pull_request:
+    branches: [master]
+    paths: [.github/workflows/migrate-cgol-provenance.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: migration/rabsef-talwet-canonical
+      - name: Copy archived public scratch provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch octagon-sound-interval-ci-2026-07-30 \
+            https://github.com/rabsef-bicrym/cgol.git /tmp/cgol
+          mkdir -p projects/octagonal-honeycomb/archive/ci-snapshots/cgol
+          cp /tmp/cgol/.github/workflows/*.yml projects/octagonal-honeycomb/archive/ci-snapshots/cgol/
+          mkdir -p projects/octagonal-honeycomb/evidence/cgol
+          cp /tmp/cgol/SMALLGAP_CI_TRIGGER.marker projects/octagonal-honeycomb/evidence/cgol/ 2>/dev/null || true
+          cat > projects/octagonal-honeycomb/archive/ci-snapshots/cgol/README.md <<'EOF'
+          # Archived cgol CI workflows
+
+          These workflows are the temporary public CI infrastructure formerly used on
+          `rabsef-bicrym/cgol`, branch `octagon-sound-interval-ci-2026-07-30`. They are
+          retained outside `.github/workflows` so they cannot run here automatically.
+          EOF
+          sed -i 's/^          //' projects/octagonal-honeycomb/archive/ci-snapshots/cgol/README.md
+      - name: Commit provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add projects/octagonal-honeycomb/archive projects/octagonal-honeycomb/evidence
+          git commit -m 'Archive temporary cgol CI provenance' || exit 0
+          git push origin HEAD:migration/rabsef-talwet-canonical
